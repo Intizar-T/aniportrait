@@ -17,11 +17,11 @@ class InferlessPythonModel:
 
         video_url = inputs['video_url']
         video_name_ext = video_url.split("/")[-1]
-        video_path = f"{self.data_dir}/{video_name_ext}"
-        os.system(f"curl {video_url} -o {video_path}")
+        self.video_path = f"{self.data_dir}/{video_name_ext}"
+        os.system(f"curl {video_url} -o {self.video_path}")
 
-        os.system(f"python -m scripts.vid2pose --video_path {video_path}")
-        self.video_pose_path = f"{video_path.split(".")[0]}_kps.mp4"
+        os.system(f"python -m scripts.vid2pose --video_path {self.video_path}")
+        self.video_pose_path = f"{self.video_path.split(".")[0]}_kps.mp4"
 
         def_config_path = "./configs/prompts/animation.yaml"
         config = OmegaConf.load(def_config_path)
@@ -40,3 +40,4 @@ class InferlessPythonModel:
         os.remove(self.config_path)
         os.remove(self.image_path)
         os.remove(self.video_pose_path)
+        os.remove(self.video_path)

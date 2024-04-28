@@ -2,3 +2,4 @@ pretrained_model/
 .DS_Store
 **/__pycache__/
 venv/
+data/
