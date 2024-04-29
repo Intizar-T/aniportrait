@@ -48,7 +48,6 @@ class InferlessPythonModel:
     def infer(self, inputs):
         image_url = inputs['image_url']
         image_name_ext = image_url.split("/")[-1]
-        image_name = image_name_ext.split(".")[0]
         self.image_path = f"{self.data_dir}/{image_name_ext}"
         os.system(f"curl {image_url} -o {self.image_path}")
 
@@ -145,7 +144,7 @@ class InferlessPythonModel:
 
         date_str = datetime.now().strftime("%Y%m%d")
         time_str = datetime.now().strftime("%H%M")
-        save_dir_name = f"{time_str}--seed_{args["seed"]}-{args["W"]}x{args["H"]}"
+        save_dir_name = f"{time_str}--seed_{args['seed']}-{args['W']}x{args['H']}"
 
         save_dir = Path(f"output/{date_str}/{save_dir_name}")
         save_dir.mkdir(exist_ok=True, parents=True)
@@ -221,7 +220,7 @@ class InferlessPythonModel:
 
         pose_list = []
         pose_tensor_list = []
-        print(f"pose video has {len(pose_images)} frames, with {args["fps"]} fps")
+        print(f"pose video has {len(pose_images)} frames, with {args['fps']} fps")
         pose_transform = transforms.Compose(
             [transforms.Resize((height, width)), transforms.ToTensor()]
         )
@@ -266,7 +265,7 @@ class InferlessPythonModel:
         )
         
         video = torch.cat([ref_image_tensor, pose_tensor[:,:,:video.shape[2]], video], dim=0)
-        save_path = f"{save_dir}/{ref_name}_{audio_name}_{args["H"]}x{args["W"]}_{int(args["cfg"])}_{time_str}_noaudio.mp4"
+        save_path = f"{save_dir}/{ref_name}_{audio_name}_{args['H']}x{args['W']}_{int(args['cfg'])}_{time_str}_noaudio.mp4"
         save_videos_grid(
             video,
             save_path,
