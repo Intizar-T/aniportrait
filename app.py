@@ -60,7 +60,6 @@ class InferlessPythonModel:
         """
         -------------- Start inferencing ------------------
         """
-        def_config_path = "/var/nfs-mount/aniportrait/configs/prompts/animation_audio.yaml"
         args = {
             "W": 512,
             "H": 512,
@@ -71,12 +70,7 @@ class InferlessPythonModel:
             "accelerate": True,
             "fi_step": 3
         }
-        # config = OmegaConf.load(def_config_path)
-
-        # if config.weight_dtype == "fp16":
         weight_dtype = torch.float16
-        # else:
-        #     weight_dtype = torch.float32
             
         audio_infer_config = OmegaConf.load('/var/nfs-mount/aniportrait/configs/inference/inference_audio.yaml')
         # prepare model
@@ -178,11 +172,6 @@ class InferlessPythonModel:
         pred = pred.reshape(pred.shape[0], -1, 3)
         pred = pred + face_result['lmks3d']
         
-        # if 'pose_temp' in config and config['pose_temp'] is not None:
-        #     pose_seq = np.load(config['pose_temp'])
-        #     mirrored_pose_seq = np.concatenate((pose_seq, pose_seq[-2:0:-1]), axis=0)
-        #     pose_seq = np.tile(mirrored_pose_seq, (sample['seq_len'] // len(mirrored_pose_seq) + 1, 1))[:sample['seq_len']]
-        # else:
         id_seed = random.randint(0, 99)
         id_seed = torch.LongTensor([id_seed]).cuda()
 
@@ -278,8 +267,6 @@ class InferlessPythonModel:
         self.video_path = save_path.replace('_noaudio.mp4', '.mp4')
         ffmpeg.output(stream.video, audio.audio, self.video_path, vcodec='copy', acodec='aac', shortest=None).run()
         os.remove(save_path)
-
-
         """
         -------------- End inferencing ------------------
         """
