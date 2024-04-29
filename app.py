@@ -78,7 +78,7 @@ class InferlessPythonModel:
         else:
             weight_dtype = torch.float32
             
-        audio_infer_config = OmegaConf.load(config.audio_inference_config)
+        audio_infer_config = OmegaConf.load('/var/nfs-mount/aniportrait/configs/inference/inference_audio.yaml')
         # prepare model
         a2m_model = Audio2MeshModel(audio_infer_config['a2m_model'])
         a2m_model.load_state_dict(torch.load(audio_infer_config['pretrained_model']['a2m_ckpt']), strict=False)
@@ -97,7 +97,7 @@ class InferlessPythonModel:
             subfolder="unet",
         ).to(dtype=weight_dtype, device="cuda")
 
-        inference_config_path = config.inference_config
+        inference_config_path = '/var/nfs-mount/aniportrait/configs/inference/inference_v2.yaml'
         infer_config = OmegaConf.load(inference_config_path)
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
             config.pretrained_base_model_path,
