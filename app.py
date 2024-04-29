@@ -28,8 +28,11 @@ class InferlessPythonModel:
         self.config_path = f"{self.data_dir}/{image_name}.yaml"
         OmegaConf.save(config, self.config_path)
 
-        result = subprocess.run(f"python -m scripts.audio2vid --config {self.config_path} -W 512 -H 512 -acc", shell=True, capture_output=True, text=True)
-        self.video_path = result.stdout.splitlines()[-1]
+        # result = subprocess.run(f"python -m scripts.audio2vid --config {self.config_path} -W 512 -H 512 -acc", shell=True, capture_output=True, text=True)
+        # self.video_path = result.stdout.splitlines()[-1]
+        
+        os.system(f"python -m scripts.audio2vid --config {self.config_path} -W 512 -H 512 -acc")
+        self.video_path = f"{self.audio_path.split('.')[0]}.mp4"
         with open(self.video_path, "rb") as video_file:
             video_data = video_file.read()
 

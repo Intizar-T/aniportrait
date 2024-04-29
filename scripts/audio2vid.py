@@ -261,8 +261,8 @@ def main():
             
             stream = ffmpeg.input(save_path)
             audio = ffmpeg.input(audio_path)
-            ffmpeg.output(stream.video, audio.audio, save_path.replace('_noaudio.mp4', '.mp4'), vcodec='copy', acodec='aac', shortest=None).run()
-            print(save_path.replace('_noaudio.mp4', '.mp4'))
+            video_path = f"{audio_path.split('.')[0]}.mp4"
+            ffmpeg.output(stream.video, audio.audio, video_path, vcodec='copy', acodec='aac', shortest=None).run()
             os.remove(save_path)
 
 if __name__ == "__main__":
