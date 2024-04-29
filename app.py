@@ -71,12 +71,12 @@ class InferlessPythonModel:
             "accelerate": True,
             "fi_step": 3
         }
-        config = OmegaConf.load(def_config_path)
+        # config = OmegaConf.load(def_config_path)
 
-        if config.weight_dtype == "fp16":
-            weight_dtype = torch.float16
-        else:
-            weight_dtype = torch.float32
+        # if config.weight_dtype == "fp16":
+        weight_dtype = torch.float16
+        # else:
+        #     weight_dtype = torch.float32
             
         audio_infer_config = OmegaConf.load('/var/nfs-mount/aniportrait/configs/inference/inference_audio.yaml')
         # prepare model
@@ -89,19 +89,19 @@ class InferlessPythonModel:
         a2p_model.cuda().eval()
 
         vae = AutoencoderKL.from_pretrained(
-            config.pretrained_vae_path,
+            '/var/nfs-mount/aniportrait/sd-vae-ft-mse',
         ).to("cuda", dtype=weight_dtype)
 
         reference_unet = UNet2DConditionModel.from_pretrained(
-            config.pretrained_base_model_path,
+            '/var/nfs-mount/aniportrait/stable-diffusion-v1-5',
             subfolder="unet",
         ).to(dtype=weight_dtype, device="cuda")
 
         inference_config_path = '/var/nfs-mount/aniportrait/configs/inference/inference_v2.yaml'
         infer_config = OmegaConf.load(inference_config_path)
         denoising_unet = UNet3DConditionModel.from_pretrained_2d(
-            config.pretrained_base_model_path,
-            config.motion_module_path,
+            '/var/nfs-mount/aniportrait/stable-diffusion-v1-5',
+            '/var/nfs-mount/aniportrait/motion_module.pth',
             subfolder="unet",
             unet_additional_kwargs=infer_config.unet_additional_kwargs,
         ).to(dtype=weight_dtype, device="cuda")
@@ -110,7 +110,7 @@ class InferlessPythonModel:
         pose_guider = PoseGuider(noise_latent_channels=320, use_ca=True).to(device="cuda", dtype=weight_dtype) # not use cross attention
 
         image_enc = CLIPVisionModelWithProjection.from_pretrained(
-            config.image_encoder_path
+            '/var/nfs-mount/aniportrait/image_encoder'
         ).to(dtype=weight_dtype, device="cuda")
 
         sched_kwargs = OmegaConf.to_container(infer_config.noise_scheduler_kwargs)
@@ -122,14 +122,14 @@ class InferlessPythonModel:
 
         # load pretrained weights
         denoising_unet.load_state_dict(
-            torch.load(config.denoising_unet_path, map_location="cpu"),
+            torch.load('/var/nfs-mount/aniportrait/denoising_unet.pth', map_location="cpu"),
             strict=False,
         )
         reference_unet.load_state_dict(
-            torch.load(config.reference_unet_path, map_location="cpu"),
+            torch.load('/var/nfs-mount/aniportrait/reference_unet.pth', map_location="cpu"),
         )
         pose_guider.load_state_dict(
-            torch.load(config.pose_guider_path, map_location="cpu"),
+            torch.load('/var/nfs-mount/aniportrait/pose_guider.pth', map_location="cpu"),
         )
 
         pipe = Pose2VideoPipeline(
@@ -178,37 +178,37 @@ class InferlessPythonModel:
         pred = pred.reshape(pred.shape[0], -1, 3)
         pred = pred + face_result['lmks3d']
         
-        if 'pose_temp' in config and config['pose_temp'] is not None:
-            pose_seq = np.load(config['pose_temp'])
-            mirrored_pose_seq = np.concatenate((pose_seq, pose_seq[-2:0:-1]), axis=0)
-            pose_seq = np.tile(mirrored_pose_seq, (sample['seq_len'] // len(mirrored_pose_seq) + 1, 1))[:sample['seq_len']]
-        else:
-            id_seed = random.randint(0, 99)
-            id_seed = torch.LongTensor([id_seed]).cuda()
+        # if 'pose_temp' in config and config['pose_temp'] is not None:
+        #     pose_seq = np.load(config['pose_temp'])
+        #     mirrored_pose_seq = np.concatenate((pose_seq, pose_seq[-2:0:-1]), axis=0)
+        #     pose_seq = np.tile(mirrored_pose_seq, (sample['seq_len'] // len(mirrored_pose_seq) + 1, 1))[:sample['seq_len']]
+        # else:
+        id_seed = random.randint(0, 99)
+        id_seed = torch.LongTensor([id_seed]).cuda()
 
-            # Currently, only inference up to a maximum length of 10 seconds is supported.
-            chunk_duration = 5 # 5 seconds
-            sr = 16000
-            fps = 30
-            chunk_size = sr * chunk_duration 
+        # Currently, only inference up to a maximum length of 10 seconds is supported.
+        chunk_duration = 5 # 5 seconds
+        sr = 16000
+        fps = 30
+        chunk_size = sr * chunk_duration 
 
-            audio_chunks = list(sample['audio_feature'].split(chunk_size, dim=1))
-            seq_len_list = [chunk_duration*fps] * (len(audio_chunks) - 1) + [sample['seq_len'] % (chunk_duration*fps)] # 30 fps 
+        audio_chunks = list(sample['audio_feature'].split(chunk_size, dim=1))
+        seq_len_list = [chunk_duration*fps] * (len(audio_chunks) - 1) + [sample['seq_len'] % (chunk_duration*fps)] # 30 fps 
 
-            audio_chunks[-2] = torch.cat((audio_chunks[-2], audio_chunks[-1]), dim=1)
-            seq_len_list[-2] = seq_len_list[-2] + seq_len_list[-1]
-            del audio_chunks[-1]
-            del seq_len_list[-1]
+        audio_chunks[-2] = torch.cat((audio_chunks[-2], audio_chunks[-1]), dim=1)
+        seq_len_list[-2] = seq_len_list[-2] + seq_len_list[-1]
+        del audio_chunks[-1]
+        del seq_len_list[-1]
 
-            pose_seq = []
-            for audio, seq_len in zip(audio_chunks, seq_len_list):
-                pose_seq_chunk = a2p_model.infer(audio, seq_len, id_seed)
-                pose_seq_chunk = pose_seq_chunk.squeeze().detach().cpu().numpy()
-                pose_seq_chunk[:, :3] *= 0.5
-                pose_seq.append(pose_seq_chunk)
-            
-            pose_seq = np.concatenate(pose_seq, 0)
-            pose_seq = smooth_pose_seq(pose_seq, 7)
+        pose_seq = []
+        for audio, seq_len in zip(audio_chunks, seq_len_list):
+            pose_seq_chunk = a2p_model.infer(audio, seq_len, id_seed)
+            pose_seq_chunk = pose_seq_chunk.squeeze().detach().cpu().numpy()
+            pose_seq_chunk[:, :3] *= 0.5
+            pose_seq.append(pose_seq_chunk)
+        
+        pose_seq = np.concatenate(pose_seq, 0)
+        pose_seq = smooth_pose_seq(pose_seq, 7)
 
         # project 3D mesh to 2D landmark
         projected_vertices = project_points(pred, face_result['trans_mat'], pose_seq, [height, width])
