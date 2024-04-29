@@ -7,6 +7,13 @@ reference_unet_path: "/var/nfs-mount/aniportrait/reference_unet.pth"
 pose_guider_path: "/var/nfs-mount/aniportrait/pose_guider.pth"
 motion_module_path: "/var/nfs-mount/aniportrait/motion_module.pth"
 
-audio_inference_config: "./configs/inference/inference_audio.yaml"
-inference_config: "./configs/inference/inference_v2.yaml"
+audio_inference_config: "/var/nfs-mount/aniportrait/configs/inference/inference_audio.yaml"
+inference_config: "/var/nfs-mount/aniportrait/configs/inference/inference_v2.yaml"
 weight_dtype: 'fp16'
+
+# path of your custom head pose template
+# pose_temp: "./configs/inference/head_pose_temp/pose_temp.npy"
+
+# test_cases:
+#   "./configs/inference/ref_images/lyl.png":
+#     - "./configs/inference/audio/lyl.wav"
