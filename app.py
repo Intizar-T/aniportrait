@@ -22,7 +22,7 @@ class InferlessPythonModel:
         self.audio_path = f"{self.data_dir}/{audio_name_ext}"
         os.system(f"curl {audio_url} -o {self.audio_path}")
 
-        def_config_path = "./configs/prompts/animation_audio.yaml"
+        def_config_path = "/var/nfs-mount/aniportrait/configs/prompts/animation_audio.yaml"
         config = OmegaConf.load(def_config_path)
         config.test_cases = {self.image_path: [self.audio_path]}
         self.config_path = f"{self.data_dir}/{image_name}.yaml"
