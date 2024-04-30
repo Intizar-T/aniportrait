@@ -46,7 +46,6 @@ class InferlessPythonModel:
             os.makedirs(self.data_dir)
 
     def infer(self, inputs):
-        print("---------------starting inferencing---------------")
         image_url = inputs['image_url']
         image_name_ext = image_url.split("/")[-1]
         self.image_path = f"{self.data_dir}/{image_name_ext}"
@@ -62,12 +61,12 @@ class InferlessPythonModel:
         -------------- Start inferencing ------------------
         """
         args = {
-            "W": 512,
-            "H": 512,
-            "seed": 42,
-            "cfg": 3.5,
-            "steps": 25,
-            "fps": 30,
+            "W": inputs.get("W", 512),
+            "H": inputs.get("H", 512),
+            "seed": inputs.get("seed", 42),
+            "cfg": inputs.get("cfg", 3.5),
+            "steps": inputs.get("steps", 25),
+            "fps": inputs.get("fps", 30),
             "accelerate": True,
             "fi_step": 3
         }
