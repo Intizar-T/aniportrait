@@ -30,7 +30,7 @@ INPUT_SCHEMA = {
         "example": [42]
     },
     "cfg": {
-        "datatype": "BP16",
+        "datatype": "BF16",
         "required": False,
         "shape": [1],
         "example": [3.5]
