@@ -30,10 +30,10 @@ INPUT_SCHEMA = {
         "example": [42]
     },
     "cfg": {
-        "datatype": "BF16",
+        "datatype": "STRING",
         "required": False,
         "shape": [1],
-        "example": [3.5]
+        "example": ["3.5"]
     },
     "steps": {
         "datatype": "INT16",
