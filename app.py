@@ -64,7 +64,7 @@ class InferlessPythonModel:
             "W": inputs.get("W", 512),
             "H": inputs.get("H", 512),
             "seed": inputs.get("seed", 42),
-            "cfg": inputs.get("cfg", 3.5),
+            "cfg": float(inputs.get("cfg", 3.5)),
             "steps": inputs.get("steps", 25),
             "fps": inputs.get("fps", 30),
             "accelerate": True,
