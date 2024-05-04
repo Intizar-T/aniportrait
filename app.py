@@ -258,7 +258,7 @@ class InferlessPythonModel:
         # merge audio and video
         stream = ffmpeg.input(save_path)
         audio = ffmpeg.input(audio_output)
-        ffmpeg.output(stream.video, audio.audio, self.video_path, vcodec='copy', acodec='aac', shortest=None).run()
+        ffmpeg.output(stream.video, audio.audio, self.video_path, vcodec='copy', acodec='aac', shortest=None).overwrite_output().run()
         
         os.remove(save_path)
         os.remove(audio_output)
