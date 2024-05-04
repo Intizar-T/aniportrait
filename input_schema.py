@@ -5,11 +5,11 @@ INPUT_SCHEMA = {
         "shape": [1],
         "example": ["https://intizar-bucket.s3.ap-northeast-2.amazonaws.com/lyl.png"],
     },
-    "audio_url": {
+    "video_url": {
         "datatype": "STRING",
         "required": True,
         "shape": [1],
-        "example": ["https://intizar-bucket.s3.ap-northeast-2.amazonaws.com/lyl.wav"],
+        "example": ["https://intizar-bucket.s3.ap-northeast-2.amazonaws.com/Aragaki_song.mp4"],
     },
     "W": {
         "datatype": "INT16",
@@ -46,5 +46,11 @@ INPUT_SCHEMA = {
         "required": False,
         "shape": [1],
         "example": [30]
-    }
+    },
+    "fi_step": {
+        "datatype": "INT16",
+        "required": False,
+        "shape": [1],
+        "example": [3]
+    },
 }
