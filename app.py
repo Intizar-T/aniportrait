@@ -60,7 +60,8 @@ class InferlessPythonModel:
             "steps": inputs.get("steps", 25),
             "fps": inputs.get("fps", 30),
             "accelerate": True,
-            "fi_step": 3
+            "fi_step": 3,
+            "L": None
         }
         config = OmegaConf.load("/var/nfs-mount/aniportrait/configs/prompts/animation_facereenac.yaml")
 
