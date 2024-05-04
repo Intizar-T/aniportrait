@@ -124,7 +124,7 @@ class InferlessPythonModel:
 
         date_str = datetime.now().strftime("%Y%m%d")
         time_str = datetime.now().strftime("%H%M")
-        save_dir_name = f"{time_str}--seed_{args["seed"]}-{args["W"]}x{args["H"]}"
+        save_dir_name = f"{time_str}--seed_{args['seed']}-{args['W']}x{args['H']}"
 
         save_dir = Path(f"output/{date_str}/{save_dir_name}")
         save_dir.mkdir(exist_ok=True, parents=True)
@@ -243,7 +243,7 @@ class InferlessPythonModel:
         )
 
         video = torch.cat([ref_image_tensor, video, src_tensor[:,:,:video.shape[2]]], dim=0)
-        save_path = f"{save_dir}/{ref_name}_{pose_name}_{args["H"]}x{args["W"]}_{int(args["cfg"])}_{time_str}_noaudio.mp4"
+        save_path = f"{save_dir}/{ref_name}_{pose_name}_{args['H']}x{args['W']}_{int(args['cfg'])}_{time_str}_noaudio.mp4"
         save_videos_grid(
             video,
             save_path,
