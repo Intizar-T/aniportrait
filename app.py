@@ -1,6 +1,43 @@
 import base64
 import os
 from omegaconf import OmegaConf
+import subprocess
+import argparse
+import os
+import ffmpeg
+import random
+from datetime import datetime
+from pathlib import Path
+from typing import List
+import subprocess
+import av
+import numpy as np
+import cv2
+import torch
+import torchvision
+from diffusers import AutoencoderKL, DDIMScheduler
+from diffusers.pipelines.stable_diffusion import StableDiffusionPipeline
+from einops import repeat
+from omegaconf import OmegaConf
+from PIL import Image
+from torchvision import transforms
+from transformers import CLIPVisionModelWithProjection
+
+from configs.prompts.test_cases import TestCasesDict
+from src.models.pose_guider import PoseGuider
+from src.models.unet_2d_condition import UNet2DConditionModel
+from src.models.unet_3d import UNet3DConditionModel
+from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
+from src.utils.util import get_fps, read_frames, save_videos_grid
+
+from src.audio_models.model import Audio2MeshModel
+from src.audio_models.pose_model import Audio2PoseModel
+from src.utils.audio_util import prepare_audio_feature
+from src.utils.mp_utils  import LMKExtractor
+from src.utils.draw_util import FaceMeshVisualizer
+from src.utils.pose_util import project_points, smooth_pose_seq
+from src.utils.frame_interpolation import init_frame_interpolation_model, batch_images_interpolation_tool
+
 
 class InferlessPythonModel:
     def initialize(self):
@@ -11,33 +48,236 @@ class InferlessPythonModel:
     def infer(self, inputs):
         image_url = inputs['image_url']
         image_name_ext = image_url.split("/")[-1]
-        image_name = image_name_ext.split(".")[0]
         self.image_path = f"{self.data_dir}/{image_name_ext}"
         os.system(f"curl {image_url} -o {self.image_path}")
 
-        video_url = inputs['video_url']
-        video_name_ext = video_url.split("/")[-1]
-        self.video_path = f"{self.data_dir}/{video_name_ext}"
-        os.system(f"curl {video_url} -o {self.video_path}")
+        audio_url = inputs['audio_url']
+        audio_name_ext = audio_url.split("/")[-1]
+        self.audio_path = f"{self.data_dir}/{audio_name_ext}"
+        os.system(f"curl {audio_url} -o {self.audio_path}")
 
-        os.system(f"python -m scripts.vid2pose --video_path {self.video_path}")
-        self.video_pose_path = f"{self.video_path.split('.')[0]}_kps.mp4"
 
-        def_config_path = "./configs/prompts/animation.yaml"
-        config = OmegaConf.load(def_config_path)
-        config.test_cases = {self.image_path: [self.video_pose_path]}
-        self.config_path = f"{self.data_dir}/{image_name}.yaml"
-        OmegaConf.save(config, self.config_path)
+        """
+        -------------- Start inferencing ------------------
+        """
+        args = {
+            "W": inputs.get("W", 512),
+            "H": inputs.get("H", 512),
+            "seed": inputs.get("seed", 42),
+            "cfg": float(inputs.get("cfg", 3.5)),
+            "steps": inputs.get("steps", 25),
+            "fps": inputs.get("fps", 30),
+            "accelerate": True,
+            "fi_step": 3
+        }
+        weight_dtype = torch.float16
+            
+        audio_infer_config = OmegaConf.load('/var/nfs-mount/aniportrait/configs/inference/inference_audio.yaml')
+        # prepare model
+        a2m_model = Audio2MeshModel(audio_infer_config['a2m_model'])
+        a2m_model.load_state_dict(torch.load(audio_infer_config['pretrained_model']['a2m_ckpt']), strict=False)
+        a2m_model.cuda().eval()
 
-        os.system(f"python -m scripts.pose2vid --config {self.config_path} -W 512 -H 512")
+        a2p_model = Audio2PoseModel(audio_infer_config['a2p_model'])
+        a2p_model.load_state_dict(torch.load(audio_infer_config['pretrained_model']['a2p_ckpt']), strict=False)
+        a2p_model.cuda().eval()
 
-        with open(self.video_pose_path, "rb") as video_file:
+        vae = AutoencoderKL.from_pretrained(
+            '/var/nfs-mount/aniportrait/sd-vae-ft-mse',
+        ).to("cuda", dtype=weight_dtype)
+
+        reference_unet = UNet2DConditionModel.from_pretrained(
+            '/var/nfs-mount/aniportrait/stable-diffusion-v1-5',
+            subfolder="unet",
+        ).to(dtype=weight_dtype, device="cuda")
+
+        inference_config_path = '/var/nfs-mount/aniportrait/configs/inference/inference_v2.yaml'
+        infer_config = OmegaConf.load(inference_config_path)
+        denoising_unet = UNet3DConditionModel.from_pretrained_2d(
+            '/var/nfs-mount/aniportrait/stable-diffusion-v1-5',
+            '/var/nfs-mount/aniportrait/motion_module.pth',
+            subfolder="unet",
+            unet_additional_kwargs=infer_config.unet_additional_kwargs,
+        ).to(dtype=weight_dtype, device="cuda")
+
+
+        pose_guider = PoseGuider(noise_latent_channels=320, use_ca=True).to(device="cuda", dtype=weight_dtype) # not use cross attention
+
+        image_enc = CLIPVisionModelWithProjection.from_pretrained(
+            '/var/nfs-mount/aniportrait/image_encoder'
+        ).to(dtype=weight_dtype, device="cuda")
+
+        sched_kwargs = OmegaConf.to_container(infer_config.noise_scheduler_kwargs)
+        scheduler = DDIMScheduler(**sched_kwargs)
+
+        generator = torch.manual_seed(args["seed"])
+
+        width, height = args["W"], args["H"]
+
+        # load pretrained weights
+        denoising_unet.load_state_dict(
+            torch.load('/var/nfs-mount/aniportrait/denoising_unet.pth', map_location="cpu"),
+            strict=False,
+        )
+        reference_unet.load_state_dict(
+            torch.load('/var/nfs-mount/aniportrait/reference_unet.pth', map_location="cpu"),
+        )
+        pose_guider.load_state_dict(
+            torch.load('/var/nfs-mount/aniportrait/pose_guider.pth', map_location="cpu"),
+        )
+
+        pipe = Pose2VideoPipeline(
+            vae=vae,
+            image_encoder=image_enc,
+            reference_unet=reference_unet,
+            denoising_unet=denoising_unet,
+            pose_guider=pose_guider,
+            scheduler=scheduler,
+        )
+        pipe = pipe.to("cuda", dtype=weight_dtype)
+
+        date_str = datetime.now().strftime("%Y%m%d")
+        time_str = datetime.now().strftime("%H%M")
+        save_dir_name = f"{time_str}--seed_{args['seed']}-{args['W']}x{args['H']}"
+
+        save_dir = Path(f"output/{date_str}/{save_dir_name}")
+        save_dir.mkdir(exist_ok=True, parents=True)
+
+
+        lmk_extractor = LMKExtractor()
+        vis = FaceMeshVisualizer(forehead_edge=False)
+        
+        if args["accelerate"]:
+            frame_inter_model = init_frame_interpolation_model()
+
+        ref_name = Path(self.image_path).stem
+        audio_name = Path(self.audio_path).stem
+
+        ref_image_pil = Image.open(self.image_path).convert("RGB")
+        ref_image_np = cv2.cvtColor(np.array(ref_image_pil), cv2.COLOR_RGB2BGR)
+        ref_image_np = cv2.resize(ref_image_np, (args["H"], args["W"]))
+        
+        face_result = lmk_extractor(ref_image_np)
+        assert face_result is not None, "No face detected."
+        lmks = face_result['lmks'].astype(np.float32)
+        ref_pose = vis.draw_landmarks((ref_image_np.shape[1], ref_image_np.shape[0]), lmks, normed=True)
+        
+        sample = prepare_audio_feature(self.audio_path, wav2vec_model_path=audio_infer_config['a2m_model']['model_path'])
+        sample['audio_feature'] = torch.from_numpy(sample['audio_feature']).float().cuda()
+        sample['audio_feature'] = sample['audio_feature'].unsqueeze(0)
+
+        # inference
+        pred = a2m_model.infer(sample['audio_feature'], sample['seq_len'])
+        pred = pred.squeeze().detach().cpu().numpy()
+        pred = pred.reshape(pred.shape[0], -1, 3)
+        pred = pred + face_result['lmks3d']
+        
+        id_seed = random.randint(0, 99)
+        id_seed = torch.LongTensor([id_seed]).cuda()
+
+        # Currently, only inference up to a maximum length of 10 seconds is supported.
+        chunk_duration = 5 # 5 seconds
+        sr = 16000
+        fps = 30
+        chunk_size = sr * chunk_duration 
+
+        audio_chunks = list(sample['audio_feature'].split(chunk_size, dim=1))
+        seq_len_list = [chunk_duration*fps] * (len(audio_chunks) - 1) + [sample['seq_len'] % (chunk_duration*fps)] # 30 fps 
+
+        audio_chunks[-2] = torch.cat((audio_chunks[-2], audio_chunks[-1]), dim=1)
+        seq_len_list[-2] = seq_len_list[-2] + seq_len_list[-1]
+        del audio_chunks[-1]
+        del seq_len_list[-1]
+
+        pose_seq = []
+        for audio, seq_len in zip(audio_chunks, seq_len_list):
+            pose_seq_chunk = a2p_model.infer(audio, seq_len, id_seed)
+            pose_seq_chunk = pose_seq_chunk.squeeze().detach().cpu().numpy()
+            pose_seq_chunk[:, :3] *= 0.5
+            pose_seq.append(pose_seq_chunk)
+        
+        pose_seq = np.concatenate(pose_seq, 0)
+        pose_seq = smooth_pose_seq(pose_seq, 7)
+
+        # project 3D mesh to 2D landmark
+        projected_vertices = project_points(pred, face_result['trans_mat'], pose_seq, [height, width])
+
+        pose_images = []
+        for i, verts in enumerate(projected_vertices):
+            lmk_img = vis.draw_landmarks((width, height), verts, normed=False)
+            pose_images.append(lmk_img)
+
+        pose_list = []
+        pose_tensor_list = []
+        print(f"pose video has {len(pose_images)} frames, with {args['fps']} fps")
+        pose_transform = transforms.Compose(
+            [transforms.Resize((height, width)), transforms.ToTensor()]
+        )
+        args_L = len(pose_images) if args.get("L", None) is None else args.get("L", None)
+        for pose_image_np in pose_images[: args_L]:
+            pose_image_pil = Image.fromarray(cv2.cvtColor(pose_image_np, cv2.COLOR_BGR2RGB))
+            pose_tensor_list.append(pose_transform(pose_image_pil))
+        sub_step = args["fi_step"] if args["accelerate"] else 1
+        for pose_image_np in pose_images[: args_L: sub_step]:
+            pose_image_np = cv2.resize(pose_image_np,  (width, height))
+            pose_list.append(pose_image_np)
+        
+        pose_list = np.array(pose_list)
+        
+        video_length = len(pose_list)
+
+        pose_tensor = torch.stack(pose_tensor_list, dim=0)  # (f, c, h, w)
+        pose_tensor = pose_tensor.transpose(0, 1)
+        pose_tensor = pose_tensor.unsqueeze(0)
+
+        video = pipe(
+            ref_image_pil,
+            pose_list,
+            ref_pose,
+            width,
+            height,
+            video_length,
+            args["steps"],
+            args["cfg"],
+            generator=generator,
+        ).videos
+        
+        if args["accelerate"]:
+            video = batch_images_interpolation_tool(video, frame_inter_model, inter_frames=args["fi_step"]-1)
+
+        ref_image_tensor = pose_transform(ref_image_pil)  # (c, h, w)
+        ref_image_tensor = ref_image_tensor.unsqueeze(1).unsqueeze(
+            0
+        )  # (1, c, 1, h, w)
+        ref_image_tensor = repeat(
+            ref_image_tensor, "b c f h w -> b c (repeat f) h w", repeat=video.shape[2]
+        )
+        
+        video = torch.cat([ref_image_tensor, pose_tensor[:,:,:video.shape[2]], video], dim=0)
+        save_path = f"{save_dir}/{ref_name}_{audio_name}_{args['H']}x{args['W']}_{int(args['cfg'])}_{time_str}_noaudio.mp4"
+        save_videos_grid(
+            video,
+            save_path,
+            n_rows=3,
+            fps=args["fps"],
+        )
+        
+        stream = ffmpeg.input(save_path)
+        audio = ffmpeg.input(self.audio_path)
+        self.video_path = save_path.replace('_noaudio.mp4', '.mp4')
+        ffmpeg.output(stream.video, audio.audio, self.video_path, vcodec='copy', acodec='aac', shortest=None).run()
+        os.remove(save_path)
+        """
+        -------------- End inferencing ------------------
+        """
+
+        with open(self.video_path, "rb") as video_file:
             video_data = video_file.read()
 
-        return {"output_image": base64.b64encode(video_data).decode("utf-8")}
+        return {"output_video": base64.b64encode(video_data).decode("utf-8")}
 
     def finalize(self):
         os.remove(self.config_path)
         os.remove(self.image_path)
-        os.remove(self.video_pose_path)
+        os.remove(self.audio_path)
         os.remove(self.video_path)

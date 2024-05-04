@@ -3,12 +3,48 @@ INPUT_SCHEMA = {
         "datatype": "STRING",
         "required": True,
         "shape": [1],
-        "example": ["https://nocodingai-backend.s3.amazonaws.com/f30d1406-fde4-4a3d-8c17-69aa8c8e920e/5e02ec5e-2db3-4644-98e0-ce50e7884921.png"],
+        "example": ["https://intizar-bucket.s3.ap-northeast-2.amazonaws.com/lyl.png"],
     },
-    "video_url": {
+    "audio_url": {
         "datatype": "STRING",
         "required": True,
         "shape": [1],
-        "example": ["https://intizar-bucket.s3.ap-northeast-2.amazonaws.com/15261364-89c8-43af-b3a2-80fe0a25ec8d.mp4"],
+        "example": ["https://intizar-bucket.s3.ap-northeast-2.amazonaws.com/lyl.wav"],
     },
+    "W": {
+        "datatype": "INT16",
+        "required": False,
+        "shape": [1],
+        "example": [512]
+    },
+    "H": {
+        "datatype": "INT16",
+        "required": False,
+        "shape": [1],
+        "example": [512]
+    },
+    "seed": {
+        "datatype": "INT16",
+        "required": False,
+        "shape": [1],
+        "example": [42]
+    },
+    "cfg": {
+        "datatype": "STRING",
+        "required": False,
+        "shape": [1],
+        "example": ["3.5"]
+    },
+    "steps": {
+        "datatype": "INT16",
+        "required": False,
+        "shape": [1],
+        "example": [25]
+    },
+    "fps": {
+        "datatype": "INT16",
+        "required": False,
+        "shape": [1],
+        "example": [30]
+    }
 }

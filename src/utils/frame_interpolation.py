@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 def init_frame_interpolation_model():
     print("Initializing frame interpolation model")
-    checkpoint_name = os.path.join("./pretrained_model/film_net_fp16.pt")
+    checkpoint_name = os.path.join("/var/nfs-mount/aniportrait/film_net_fp16.pt")
 
     model = torch.jit.load(checkpoint_name, map_location='cpu')
     model.eval()
