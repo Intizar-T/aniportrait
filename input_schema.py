@@ -46,5 +46,11 @@ INPUT_SCHEMA = {
         "required": False,
         "shape": [1],
         "example": [30]
-    }
+    },
+    "fi_step": {
+        "datatype": "INT16",
+        "required": False,
+        "shape": [1],
+        "example": [3]
+    },
 }

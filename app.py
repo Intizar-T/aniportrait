@@ -68,7 +68,7 @@ class InferlessPythonModel:
             "steps": inputs.get("steps", 25),
             "fps": inputs.get("fps", 30),
             "accelerate": True,
-            "fi_step": 3
+            "fi_step": inputs.get("fi_step", 3),
         }
         weight_dtype = torch.float16
             
