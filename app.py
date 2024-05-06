@@ -253,12 +253,12 @@ class InferlessPythonModel:
             ref_image_tensor, "b c f h w -> b c (repeat f) h w", repeat=video.shape[2]
         )
         
-        video = torch.cat([ref_image_tensor, pose_tensor[:,:,:video.shape[2]], video], dim=0)
+        # video = torch.cat([ref_image_tensor, pose_tensor[:,:,:video.shape[2]], video], dim=0)
         save_path = f"{save_dir}/{ref_name}_{audio_name}_{args['H']}x{args['W']}_{int(args['cfg'])}_{time_str}_noaudio.mp4"
         save_videos_grid(
             video,
             save_path,
-            n_rows=3,
+            n_rows=1,
             fps=args["fps"],
         )
         
