@@ -58,7 +58,7 @@ class InferlessPythonModel:
 
 
         """
-        -------------- Start inferencing ------------------
+        -------------- Start inferencing -----------------
         """
         args = {
             "W": inputs.get("W", 512),
